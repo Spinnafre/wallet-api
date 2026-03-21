@@ -1,0 +1,54 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["tracing"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  wallet       Wallet?
+}
+
+model Wallet {
+  id                  String        @id @default(uuid())
+  userId              String        @unique
+  balanceCents        Int           @default(0)
+  frozen              Boolean       @default(false)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  user                User          @relation(fields: [userId], references: [id])
+  sentTransactions    Transaction[] @relation("SourceWallet")
+  receivedTransactions Transaction[] @relation("TargetWallet")
+}
+
+model Transaction {
+  id             String            @id @default(uuid())
+  type           TransactionType
+  status         TransactionStatus @default(PENDING)
+  sourceWalletId String?
+  targetWalletId String
+  amountCents    Int
+  revertedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  sourceWallet   Wallet?           @relation("SourceWallet", fields: [sourceWalletId], references: [id])
+  targetWallet   Wallet            @relation("TargetWallet", fields: [targetWalletId], references: [id])
+}
+
+enum TransactionType {
+  DEPOSIT
+  TRANSFER
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  REVERTED
+}

@@ -1,0 +1,47 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "🚀 API: Dev (watch + debug)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "watch", "--inspect-brk", "src/main.ts"],
+      "envFile": "${workspaceFolder}/.env.development",
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "🧪 Tests: Unit (debug)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vitest",
+        "--config",
+        "vitest.config.ts",
+        "--reporter=verbose"
+      ],
+      "envFile": "${workspaceFolder}/.env.test",
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "🔗 Tests: Integration (debug)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vitest",
+        "--config",
+        "vitest.integration.config.ts",
+        "--reporter=verbose"
+      ],
+      "envFile": "${workspaceFolder}/.env.test",
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"],
+      "console": "integratedTerminal"
+    }
+  ]
+}
