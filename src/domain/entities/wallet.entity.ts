@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { MoneyVO } from '../value-objects/money.vo';
 import { InsufficientFundsError, WalletFrozenError } from '../errors/domain-errors';
 
@@ -33,7 +33,7 @@ export class Wallet {
       throw new WalletFrozenError('Cannot credit to a frozen wallet');
     }
 
-    // As per spec: Se saldo atual for negativo -> lancar WalletFrozenError "saldo negativo, carteira congelada"
+    // INFO: Se o saldo de um usuário ficar negativo devido a um problema, nenhum depósito deve ser permitido
     if (this.balance.value < 0) {
       this.freeze();
       throw new WalletFrozenError('saldo negativo, carteira congelada');
@@ -43,11 +43,13 @@ export class Wallet {
   }
 
   forceDebit(amount: MoneyVO): void {
-    const mockBalanceAfterDebit = this.balance.subtract(amount);
-    if (mockBalanceAfterDebit.value < 0) {
+    const balanceAfterDebit = this.balance.subtract(amount);
+
+    if (balanceAfterDebit.value < 0) {
       this.freeze();
     }
-    this.balance = mockBalanceAfterDebit;
+
+    this.balance = balanceAfterDebit;
   }
 
   debit(amount: MoneyVO): void {
@@ -55,14 +57,13 @@ export class Wallet {
       throw new WalletFrozenError('Cannot debit from a frozen wallet');
     }
 
-    const zero = MoneyVO.of(0);
-    const mockBalanceAfterDebit = this.balance.subtract(amount);
+    const balanceAfterDebit = this.balance.subtract(amount);
 
-    if (mockBalanceAfterDebit.value < 0) {
+    if (balanceAfterDebit.value < 0) {
       throw new InsufficientFundsError();
     }
 
-    this.balance = mockBalanceAfterDebit;
+    this.balance = balanceAfterDebit;
   }
 
   freeze(): void {

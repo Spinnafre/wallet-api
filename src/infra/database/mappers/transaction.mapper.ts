@@ -1,8 +1,4 @@
-import {
-  Transaction as PrismaTransaction,
-  TransactionType,
-  TransactionStatus,
-} from '@prisma/client';
+import { Transaction as PrismaTransaction } from '@prisma/client';
 import { Transaction } from '../../../domain/entities/transaction.entity';
 import { MoneyVO } from '../../../domain/value-objects/money.vo';
 

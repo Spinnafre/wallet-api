@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { EmailVO } from '../value-objects/email.vo';
 
 export class User {

@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { MoneyVO } from '../value-objects/money.vo';
 import { InvalidOperationError } from '../errors/domain-errors';
 
