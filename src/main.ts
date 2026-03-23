@@ -1,5 +1,4 @@
 import { bootstrapOtel } from './infra/observability/tracing/otel.bootstrap';
-// Initialize OpenTelemetry before importing other modules
 bootstrapOtel();
 
 import { NestFactory } from '@nestjs/core';
@@ -7,14 +6,14 @@ import { AppModule } from './app.module';
 import { Logger } from 'nestjs-pino';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
+import { ConfigService } from '@nestjs/config';
+import { IEnv } from '@config/env';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create(AppModule, { bufferLogs: false });
 
-  // Use Pino for NestJS logging
   app.useLogger(app.get(Logger));
 
-  // Swagger Documentation Setup
   const config = new DocumentBuilder()
     .setTitle('Financial Wallet API')
     .setDescription('The Financial Wallet API description')
@@ -25,9 +24,9 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs-json', app, document);
 
-  // Scalar setup (Replaces Swagger UI for a better visual)
   app.use(
     '/docs',
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     apiReference({
       spec: {
         content: document,
@@ -35,7 +34,16 @@ async function bootstrap() {
     } as any),
   );
 
+  const configService = app.get<ConfigService<IEnv, true>>(ConfigService);
+
+  const port = configService.get('PORT', { infer: true });
+
+  app.get(Logger).log(`Application is running on: ${port}`);
+
   app.enableShutdownHooks();
-  await app.listen(process.env.APP_PORT ?? 3000);
+  await app.listen(port);
 }
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('Fatal error during bootstrap:', err);
+  process.exit(1);
+});

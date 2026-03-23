@@ -42,14 +42,6 @@ export class RevertTransactionUseCase {
 
       targetWallet.forceDebit(transaction.amount);
 
-      // We assume forcing a credit to source wallet could theoretically unfreeze it if $>0?
-      // But spec just says "creditar na carteira de origem". The `credit` method will
-      // check if it's frozen... wait, reverting a transaction shouldn't fail if the source wallet is frozen,
-      // because we're GIVING them money back. Let's force credit as well to bypass `freeze` block wrapper if needed.
-      // Actually Wallet.credit checks if it's frozen. Let's add `forceCredit` to Wallet to bypass frozen check.
-
-      // Let's manually increment balance bypassing frozen check for reversion, but domain logic requires it.
-      // So we will add `forceCredit` in another tool call.
       sourceWallet.credit(transaction.amount);
 
       await this.transactionRepository.saveReversion(transaction, targetWallet, sourceWallet);

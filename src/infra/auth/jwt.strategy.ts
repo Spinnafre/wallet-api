@@ -1,21 +1,33 @@
-import { Injectable } from '@nestjs/common';
+import { IEnv } from '@config/env';
+import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import z from 'zod';
 
-// Ensure you export the payload structure expected
-export type JwtPayload = { sub: string; email: string };
+const jwtTokenPayloadSchema = z
+  .object({
+    sub: z.uuid(),
+    email: z.email(),
+  })
+  .required();
+
+export type IJwtPayload = z.infer<typeof jwtTokenPayloadSchema>;
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(@Inject(ConfigService) configService: ConfigService<IEnv, true>) {
+    const publicKey = configService.get('JWT_PUBLIC_KEY', { infer: true });
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'fallback_secret',
+      secretOrKey: Buffer.from(publicKey, 'base64'),
+      algorithms: ['RS256'],
     });
   }
 
-  validate(payload: JwtPayload) {
-    return { id: payload.sub, email: payload.email };
+  validate(payload: IJwtPayload) {
+    return jwtTokenPayloadSchema.parse(payload);
   }
 }

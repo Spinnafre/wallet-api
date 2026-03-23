@@ -1,5 +1,5 @@
 import { Controller, Post, Body, UsePipes, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { RegisterUserUseCase } from '../../../application/use-cases/auth/register-user.use-case';
 import { AuthenticateUserUseCase } from '../../../application/use-cases/auth/authenticate-user.use-case';
 import { registerSchema } from '../dtos/auth/register.dto';
@@ -19,7 +19,28 @@ export class AuthController {
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new user' })
-  @ApiResponse({ status: 201, description: 'User successfully registered' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', example: 'user@example.com' },
+        password: { type: 'string', minLength: 6, example: 'secret123' },
+      },
+      required: ['email', 'password'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'User successfully registered',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        email: { type: 'string', format: 'email', example: 'user@example.com' },
+        createdAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
   @ApiResponse({ status: 409, description: 'User already exists' })
   @UsePipes(new ZodValidationPipe(registerSchema))
   async register(@Body() dto: RegisterDto) {
@@ -30,7 +51,26 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Authenticate a user' })
-  @ApiResponse({ status: 200, description: 'User successfully authenticated' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', example: 'user@example.com' },
+        password: { type: 'string', minLength: 6, example: 'secret123' },
+      },
+      required: ['email', 'password'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User successfully authenticated',
+    schema: {
+      type: 'object',
+      properties: {
+        accessToken: { type: 'string', example: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...' },
+      },
+    },
+  })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   @UsePipes(new ZodValidationPipe(loginSchema))
   async login(@Body() dto: LoginDto) {

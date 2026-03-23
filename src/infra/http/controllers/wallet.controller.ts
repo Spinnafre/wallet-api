@@ -5,13 +5,19 @@ import {
   Body,
   Param,
   UseGuards,
-  UsePipes,
   NotFoundException,
   HttpCode,
   HttpStatus,
   Inject,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+  ApiParam,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { CurrentUser } from '../../../shared/decorators/current-user.decorator';
 
@@ -27,6 +33,7 @@ import { transferSchema } from '../dtos/wallet/transfer.dto';
 import type { TransferDto } from '../dtos/wallet/transfer.dto';
 import { ZodValidationPipe } from '../pipes/zod-validation.pipe';
 import { TransactionPresenter } from '../presenters/transaction.presenter';
+import { type IJwtPayload } from '@infra/auth/jwt.strategy';
 
 @ApiTags('Wallet')
 @ApiBearerAuth()
@@ -49,9 +56,19 @@ export class WalletController {
 
   @Get('balance')
   @ApiOperation({ summary: 'Get current wallet balance' })
-  @ApiResponse({ status: 200, description: 'Returns wallet balance' })
-  async getBalance(@CurrentUser() user: { id: string }) {
-    const walletId = await this.getWalletIdForUser(user.id);
+  @ApiResponse({
+    status: 200,
+    description: 'Returns wallet balance',
+    schema: {
+      type: 'object',
+      properties: {
+        balanceCents: { type: 'number', example: 1000 },
+        frozen: { type: 'boolean', example: false },
+      },
+    },
+  })
+  async getBalance(@CurrentUser() req: IJwtPayload) {
+    const walletId = await this.getWalletIdForUser(req.sub);
     const result = await this.getBalanceUseCase.execute(walletId);
     return result;
   }
@@ -59,10 +76,38 @@ export class WalletController {
   @Post('deposit')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Deposit into wallet' })
-  @ApiResponse({ status: 200, description: 'Deposit successful' })
-  @UsePipes(new ZodValidationPipe(depositSchema))
-  async deposit(@CurrentUser() user: { id: string }, @Body() dto: DepositDto) {
-    const walletId = await this.getWalletIdForUser(user.id);
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        amountCents: { type: 'number', minimum: 1, example: 5000 },
+      },
+      required: ['amountCents'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Deposit successful',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        type: { type: 'string', example: 'DEPOSIT' },
+        status: { type: 'string', example: 'COMPLETED' },
+        sourceWalletId: { type: 'string', format: 'uuid', nullable: true },
+        targetWalletId: { type: 'string', format: 'uuid' },
+        amountCents: { type: 'number', example: 5000 },
+        createdAt: { type: 'string', format: 'date-time' },
+        revertedAt: { type: 'string', format: 'date-time', nullable: true },
+      },
+    },
+  })
+  async deposit(
+    @CurrentUser() req: IJwtPayload,
+    @Body(new ZodValidationPipe(depositSchema)) dto: DepositDto,
+  ) {
+    console.log(dto);
+    const walletId = await this.getWalletIdForUser(req.sub);
     const transaction = await this.depositUseCase.execute(walletId, dto);
     return TransactionPresenter.toHttp(transaction);
   }
@@ -70,10 +115,42 @@ export class WalletController {
   @Post('transfer')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Transfer funds to another wallet' })
-  @ApiResponse({ status: 200, description: 'Transfer successful' })
-  @UsePipes(new ZodValidationPipe(transferSchema))
-  async transfer(@CurrentUser() user: { id: string }, @Body() dto: TransferDto) {
-    const sourceWalletId = await this.getWalletIdForUser(user.id);
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        targetWalletId: {
+          type: 'string',
+          format: 'uuid',
+          example: '123e4567-e89b-12d3-a456-426614174000',
+        },
+        amountCents: { type: 'number', minimum: 1, example: 1500 },
+      },
+      required: ['targetWalletId', 'amountCents'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Transfer successful',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        type: { type: 'string', example: 'TRANSFER' },
+        status: { type: 'string', example: 'COMPLETED' },
+        sourceWalletId: { type: 'string', format: 'uuid' },
+        targetWalletId: { type: 'string', format: 'uuid' },
+        amountCents: { type: 'number', example: 1500 },
+        createdAt: { type: 'string', format: 'date-time' },
+        revertedAt: { type: 'string', format: 'date-time', nullable: true },
+      },
+    },
+  })
+  async transfer(
+    @CurrentUser() req: IJwtPayload,
+    @Body(new ZodValidationPipe(transferSchema)) dto: TransferDto,
+  ) {
+    const sourceWalletId = await this.getWalletIdForUser(req.sub);
     const transaction = await this.transferUseCase.execute(sourceWalletId, dto);
     return TransactionPresenter.toHttp(transaction);
   }
@@ -81,9 +158,31 @@ export class WalletController {
   @Post('transactions/:transactionId/revert')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Revert a transaction' })
-  @ApiResponse({ status: 200, description: 'Transaction successfully reverted' })
-  async revert(@CurrentUser() user: { id: string }, @Param('transactionId') transactionId: string) {
-    const walletId = await this.getWalletIdForUser(user.id);
+  @ApiParam({
+    name: 'transactionId',
+    type: 'string',
+    description: 'ID of the transaction to revert',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Transaction successfully reverted',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        type: { type: 'string', example: 'TRANSFER' },
+        status: { type: 'string', example: 'REVERTED' },
+        sourceWalletId: { type: 'string', format: 'uuid', nullable: true },
+        targetWalletId: { type: 'string', format: 'uuid', nullable: true },
+        amountCents: { type: 'number', example: 1500 },
+        createdAt: { type: 'string', format: 'date-time' },
+        revertedAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  async revert(@CurrentUser() req: IJwtPayload, @Param('transactionId') transactionId: string) {
+    const walletId = await this.getWalletIdForUser(req.sub);
     const transaction = await this.revertTransactionUseCase.execute(walletId, transactionId);
     return TransactionPresenter.toHttp(transaction);
   }

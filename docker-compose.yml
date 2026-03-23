@@ -1,6 +1,4 @@
 services:
-  # ──────────── Bancos de Dados ────────────
-
   db:
     image: postgres:16
     environment:
@@ -35,8 +33,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ──────────── Observabilidade ────────────
-
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     command: ["--config=/etc/otel-collector-config.yml"]
@@ -64,6 +60,8 @@ services:
       - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     profiles: ["dev", "prod"]
 
   grafana:

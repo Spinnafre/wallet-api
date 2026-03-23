@@ -1,37 +1,48 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import {
+  makeCounterProvider,
+  makeHistogramProvider,
+  PrometheusModule,
+} from '@willsoto/nestjs-prometheus';
 import { LoggerModule } from 'nestjs-pino';
-import { PrometheusModule } from '@willsoto/nestjs-prometheus';
-import { JwtModule } from '@nestjs/jwt';
 
 import { PrismaService } from './infra/database/prisma/prisma.service';
+import { PrismaTransactionRepository } from './infra/database/prisma/repositories/prisma-transaction.repository';
 import { PrismaUserRepository } from './infra/database/prisma/repositories/prisma-user.repository';
 import { PrismaWalletRepository } from './infra/database/prisma/repositories/prisma-wallet.repository';
-import { PrismaTransactionRepository } from './infra/database/prisma/repositories/prisma-transaction.repository';
 
-import { BcryptHashService } from './infra/auth/bcrypt-hash.service';
-import { JwtTokenService } from './infra/auth/jwt-token.service';
-import { JwtStrategy } from './infra/auth/jwt.strategy';
-
-import { RegisterUserUseCase } from './application/use-cases/auth/register-user.use-case';
 import { AuthenticateUserUseCase } from './application/use-cases/auth/authenticate-user.use-case';
-import { DepositUseCase } from './application/use-cases/wallet/deposit.use-case';
-import { TransferUseCase } from './application/use-cases/wallet/transfer.use-case';
-import { RevertTransactionUseCase } from './application/use-cases/wallet/revert-transaction.use-case';
+import { RegisterUserUseCase } from './application/use-cases/auth/register-user.use-case';
 import { GetBalanceUseCase } from './application/use-cases/shared/get-balance.use-case';
+import { DepositUseCase } from './application/use-cases/wallet/deposit.use-case';
+import { RevertTransactionUseCase } from './application/use-cases/wallet/revert-transaction.use-case';
+import { TransferUseCase } from './application/use-cases/wallet/transfer.use-case';
 
+import { IEnv, validate } from '@config/env';
+import { AuthModule } from '@infra/auth/auth.module';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 import { AuthController } from './infra/http/controllers/auth.controller';
 import { WalletController } from './infra/http/controllers/wallet.controller';
 import { DomainExceptionFilter } from './infra/http/filters/domain-exception.filter';
-import { APP_FILTER } from '@nestjs/core';
+import { MetricsInterceptor } from './infra/observability/metrics/metrics.interceptor';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    LoggerModule.forRoot({
-      pinoHttp: {
-        level: process.env.NODE_ENV !== 'production' ? 'debug' : 'info',
-        transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
+    ConfigModule.forRoot({ isGlobal: true, validate }),
+    LoggerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<IEnv, true>) => {
+        const isProd = config.get('NODE_ENV', { infer: true }) === 'production';
+        return {
+          pinoHttp: {
+            level: isProd ? 'info' : 'debug',
+            transport: isProd ? undefined : { target: 'pino-pretty' },
+          },
+        };
       },
     }),
     PrometheusModule.register({
@@ -40,21 +51,28 @@ import { APP_FILTER } from '@nestjs/core';
         enabled: true,
       },
     }),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'fallback_secret',
-      signOptions: { expiresIn: (process.env.JWT_EXPIRES_IN || '24h') as any },
-    }),
+    AuthModule,
   ],
-  controllers: [AuthController, WalletController],
+  controllers: [AuthController, WalletController, AppController],
   providers: [
-    { provide: APP_FILTER, useClass: DomainExceptionFilter },
     PrismaService,
+    AppService,
+    { provide: APP_FILTER, useClass: DomainExceptionFilter },
+    { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
+    makeCounterProvider({
+      name: 'http_requests_total',
+      help: 'Total number of HTTP requests',
+      labelNames: ['method', 'path', 'status'],
+    }),
+    makeHistogramProvider({
+      name: 'http_request_duration_seconds',
+      help: 'Duration of HTTP requests in seconds',
+      labelNames: ['method', 'path', 'status'],
+      buckets: [0.01, 0.05, 0.1, 0.5, 1, 5],
+    }),
     { provide: 'UserRepositoryPort', useClass: PrismaUserRepository },
     { provide: 'WalletRepositoryPort', useClass: PrismaWalletRepository },
     { provide: 'TransactionRepositoryPort', useClass: PrismaTransactionRepository },
-    { provide: 'HashServicePort', useClass: BcryptHashService },
-    { provide: 'TokenServicePort', useClass: JwtTokenService },
-    JwtStrategy,
     {
       provide: RegisterUserUseCase,
       useFactory: (userRepo, walletRepo, hashService) =>

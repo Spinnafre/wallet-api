@@ -1,24 +1,22 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
-import { PrismaInstrumentation } from '@prisma/instrumentation';
+import { env } from '@config/env';
 
 const traceExporter = new OTLPTraceExporter({
-  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'grpc://localhost:4317',
+  url: env.OTEL_EXPORTER_OTLP_ENDPOINT,
 });
 
 export const otelSDK = new NodeSDK({
   traceExporter,
   instrumentations: [
     getNodeAutoInstrumentations({
-      // Disable some heavy trace logs if necessary
       '@opentelemetry/instrumentation-fs': { enabled: false },
     }),
-    new PrismaInstrumentation(),
   ],
 });
 
-export async function bootstrapOtel() {
+export function bootstrapOtel() {
   try {
     otelSDK.start();
     console.log('OpenTelemetry SDK started successfully');
